@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <title>UEFI 管理器</title>
+    <script>
+        (function(){
+            var modeCode=localStorage.getItem('fnos-theme-mode');
+            if(modeCode==='20'){document.documentElement.setAttribute('data-theme','dark');}
+            else if(modeCode==='10'){document.documentElement.setAttribute('data-theme','light');}
+            else{
+                if(window.matchMedia('(prefers-color-scheme:dark)').matches){
+                    document.documentElement.setAttribute('data-theme','dark');
+                }
+            }
+        })();
+    </script>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="app-header">
+            <div class="header-left">
+                <span class="header-icon">&#9881;</span>
+                <h1>UEFI 管理器</h1>
+            </div>
+            <button id="refreshBtn" class="btn btn-secondary" onclick="loadEntries()">
+                <span class="btn-icon">&#8635;</span> 刷新
+            </button>
+        </header>
+
+        <section class="status-section">
+            <div class="status-card status-current">
+                <div class="status-label">当前启动项</div>
+                <div id="bootCurrent" class="status-value">加载中...</div>
+            </div>
+            <div class="status-card status-next">
+                <div class="status-label">下次启动项</div>
+                <div id="bootNext" class="status-value">加载中...</div>
+            </div>
+            <div class="status-card status-order">
+                <div class="status-label">启动顺序</div>
+                <div id="bootOrderDisplay" class="status-value">加载中...</div>
+            </div>
+        </section>
+
+        <section class="entries-section">
+            <div class="section-header">
+                <h2>启动项管理</h2>
+                <div class="section-actions">
+                    <button id="saveOrderBtn" class="btn btn-primary btn-sm" onclick="saveBootOrder()" style="display:none;">
+                        保存启动顺序
+                    </button>
+                    <button id="clearBootNextBtn" class="btn btn-warning btn-sm" onclick="clearBootNext()">
+                        清除下次启动项
+                    </button>
+                    <button class="btn btn-success btn-sm" onclick="openCreateModal()">
+                        + 新增启动项
+                    </button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table id="entriesTable">
+                    <thead>
+                        <tr>
+                            <th class="col-order">顺序</th>
+                            <th>编号</th>
+                            <th>名称</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="entriesBody">
+                        <tr>
+                            <td colspan="5" class="loading-cell">加载中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="backup-section">
+            <div class="section-header">
+                <h2>备份与恢复</h2>
+                <div class="section-actions">
+                    <button class="btn btn-success btn-sm" onclick="createBackup()">创建备份</button>
+                    <button class="btn btn-secondary btn-sm" onclick="loadBackups()">刷新列表</button>
+                </div>
+            </div>
+            <div id="backupList" class="backup-list">
+                <div class="backup-empty">加载中...</div>
+            </div>
+        </section>
+
+        <div id="createModal" class="modal" style="display:none;">
+            <div class="modal-overlay" onclick="closeCreateModal()"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>新增 UEFI 启动项</h3>
+                    <button class="modal-close" onclick="closeCreateModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="entryLabel">启动项名称 <span class="required">*</span></label>
+                        <input type="text" id="entryLabel" placeholder="例如: Windows Boot Manager" maxlength="256">
+                    </div>
+                    <div class="form-group">
+                        <label for="entryDisk">磁盘设备 <span class="required">*</span></label>
+                        <select id="entryDisk" onchange="onDiskChange('create')">
+                            <option value="">-- 加载中 --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="entryPartition">分区编号 <span class="required">*</span></label>
+                        <select id="entryPartition">
+                            <option value="">-- 请先选择磁盘 --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="entryLoader">EFI 加载器路径 <span class="required">*</span></label>
+                        <input type="text" id="entryLoader" placeholder="例如: \EFI\BOOT\BOOTX64.EFI">
+                        <div class="form-hint">使用反斜杠(\)作为路径分隔符，路径相对于EFI系统分区根目录</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeCreateModal()">取消</button>
+                    <button class="btn btn-primary" id="createEntryBtn" onclick="createEntry()">创建</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="editModal" class="modal" style="display:none;">
+            <div class="modal-overlay" onclick="closeEditModal()"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>编辑启动项</h3>
+                    <button class="modal-close" onclick="closeEditModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>启动项编号</label>
+                        <input type="text" id="editBootId" readonly class="input-readonly">
+                    </div>
+                    <div class="form-group">
+                        <label for="editLabel">启动项名称 <span class="required">*</span></label>
+                        <input type="text" id="editLabel" maxlength="256">
+                    </div>
+                    <div class="form-group">
+                        <label for="editDisk">磁盘设备 <span class="required">*</span></label>
+                        <select id="editDisk" onchange="onDiskChange('edit')">
+                            <option value="">-- 加载中 --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editPartition">分区编号 <span class="required">*</span></label>
+                        <select id="editPartition">
+                            <option value="">-- 请先选择磁盘 --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editLoader">EFI 加载器路径 <span class="required">*</span></label>
+                        <input type="text" id="editLoader">
+                        <div class="form-hint">使用反斜杠(\)作为路径分隔符</div>
+                    </div>
+                    <div class="edit-notice">
+                        <span class="edit-notice-icon">&#9888;</span>
+                        修改启动项会删除旧条目并创建新条目，启动项编号可能会改变。
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+                    <button class="btn btn-primary" id="updateEntryBtn" onclick="updateEntry()">保存修改</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="deleteModal" class="modal" style="display:none;">
+            <div class="modal-overlay" onclick="closeDeleteModal()"></div>
+            <div class="modal-content modal-sm">
+                <div class="modal-header modal-header-danger">
+                    <h3>删除启动项</h3>
+                    <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="delete-warning">
+                        <span class="delete-warning-icon">&#9888;</span>
+                        <p>确定要删除启动项 <strong id="deleteEntryName"></strong> 吗？</p>
+                        <p class="delete-sub">此操作不可撤销，删除后该启动项将从EFI固件中永久移除。</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeDeleteModal()">取消</button>
+                    <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDelete()">确认删除</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="restoreModal" class="modal" style="display:none;">
+            <div class="modal-overlay" onclick="closeRestoreModal()"></div>
+            <div class="modal-content modal-sm">
+                <div class="modal-header modal-header-danger">
+                    <h3>恢复备份</h3>
+                    <button class="modal-close" onclick="closeRestoreModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="delete-warning">
+                        <span class="delete-warning-icon">&#9888;</span>
+                        <p>确定要从备份 <strong id="restoreFileName"></strong> 恢复吗？</p>
+                        <p class="delete-sub">恢复将删除当前所有启动项并从备份重建。系统会自动创建恢复前的安全备份。</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeRestoreModal()">取消</button>
+                    <button class="btn btn-danger" id="confirmRestoreBtn" onclick="confirmRestore()">确认恢复</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="toast" class="toast" style="display:none;"></div>
+    </div>
+
+    <script src="./js/main.js"></script>
+</body>
+</html>

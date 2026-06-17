@@ -1,0 +1,15 @@
+#!/bin/bash
+
+if ! command -v efibootmgr &> /dev/null; then
+    echo "efibootmgr not found, installing..."
+    apt update && apt install -y efibootmgr
+    if [ $? -ne 0 ]; then
+        echo "Failed to install efibootmgr"
+        exit 1
+    fi
+    echo "efibootmgr installed successfully"
+else
+    echo "efibootmgr is already installed"
+fi
+
+exit 0

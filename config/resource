@@ -1,0 +1,18 @@
+{
+    "data-share":
+    {
+        "shares":
+        [
+            {
+                "name": "UEFIBootManager",
+                "permission":
+                {
+                    "rw":
+                    [
+                        "UEFIBootManager"
+                    ]
+                }
+            }
+        ]
+    }
+}

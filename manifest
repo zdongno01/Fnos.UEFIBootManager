@@ -1,0 +1,10 @@
+appname               = UEFIBootManager
+version               = 1.0.0
+display_name          = UEFI管理器
+desc                  = UEFI启动项图形化管理工具，支持添加\修改\删除\设置下次启动项、修改启动顺序
+arch                  = x86_64
+source                = thirdparty
+maintainer            = 墨迹
+distributor           = 墨迹
+desktop_uidir         = ui
+desktop_applaunchname = UEFIBootManager.Application
